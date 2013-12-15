@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>AMApplicationBuild</key>
+	<string>381</string>
+	<key>AMApplicationVersion</key>
+	<string>2.4</string>
+	<key>AMDocumentVersion</key>
+	<string>2</string>
+	<key>actions</key>
+	<array>
+		<dict>
+			<key>action</key>
+			<dict>
+				<key>AMAccepts</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Optional</key>
+					<true/>
+					<key>Types</key>
+					<array>
+						<string>com.apple.cocoa.string</string>
+					</array>
+				</dict>
+				<key>AMActionVersion</key>
+				<string>2.0.3</string>
+				<key>AMApplication</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>AMParameterProperties</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<dict/>
+					<key>CheckedForUserDefaultShell</key>
+					<dict/>
+					<key>inputMethod</key>
+					<dict/>
+					<key>shell</key>
+					<dict/>
+					<key>source</key>
+					<dict/>
+				</dict>
+				<key>AMProvides</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Types</key>
+					<array>
+						<string>com.apple.cocoa.string</string>
+					</array>
+				</dict>
+				<key>ActionBundlePath</key>
+				<string>/System/Library/Automator/Run Shell Script.action</string>
+				<key>ActionName</key>
+				<string>Run Shell Script</string>
+				<key>ActionParameters</key>
+				<dict>
+					<key>COMMAND_STRING</key>
+					<string>import sys
+import re
+import math
+import datetime
+
+
+# http://stackoverflow.com/a/4766400/20226
+tz_str = '''-12 Y
+-11 X NUT SST
+-10 W CKT HAST HST TAHT TKT
+-9 V AKST GAMT GIT HADT HNY
+-8 U AKDT CIST HAY HNP PST PT
+-7 T HAP HNR MST PDT
+-6 S CST EAST GALT HAR HNC MDT
+-5 R CDT COT EASST ECT EST ET HAC HNE PET
+-4 Q AST BOT CLT COST EDT FKT GYT HAE HNA PYT
+-3 P ADT ART BRT CLST FKST GFT HAA PMST PYST SRT UYT WGT
+-2 O BRST FNT PMDT UYST WGST
+-1 N AZOT CVT EGT
+0 Z EGST GMT UTC WET WT
+1 A CET DFT WAT WEDT WEST
+2 B CAT CEDT CEST EET SAST WAST
+3 C EAT EEDT EEST IDT MSK
+4 D AMT AZT GET GST KUYT MSD MUT RET SAMT SCT
+5 E AMST AQTT AZST HMT MAWT MVT PKT TFT TJT TMT UZT YEKT
+6 F ALMT BIOT BTT IOT KGT NOVT OMST YEKST
+7 G CXT DAVT HOVT ICT KRAT NOVST OMSST THA WIB
+8 H ACT AWST BDT BNT CAST HKT IRKT KRAST MYT PHT SGT ULAT WITA WST
+9 I AWDT IRKST JST KST PWT TLT WDT WIT YAKT
+10 K AEST ChST PGT VLAT YAKST YAPT
+11 L AEDT LHDT MAGT NCT PONT SBT VLAST VUT
+12 M ANAST ANAT FJT GILT MAGST MHT NZST PETST PETT TVT WFT
+13 FJST NZDT
+11.5 NFT
+10.5 ACDT LHST
+9.5 ACST
+6.5 CCT MMT
+5.75 NPT
+5.5 SLT
+4.5 AFT IRDT
+3.5 IRST
+-2.5 HAT NDT
+-3.5 HNT NST NT
+-4.5 HLV VET
+-9.5 MART MIT'''
+
+
+offset_by_abbr = {}
+for tz_descr in map(str.split, tz_str.split('\n')):
+    tz_offset = int(float(tz_descr[0]) * 3600)
+    for tz_code in tz_descr[1:]:
+        if len(tz_code) &gt; 1:
+            offset_by_abbr[tz_code] = tz_offset
+
+
+time_re = re.compile(r'(?P&lt;hour&gt;\d{1,2}):(?P&lt;minute&gt;\d{1,2})')
+hour_re = re.compile(r'(?P&lt;hour&gt;\d{1,2})(?P&lt;period&gt;am|pm)', re.IGNORECASE)
+tz_re = re.compile(r'({})'.format('|'.join(offset_by_abbr.keys())))
+day_seconds = 24 * 60 * 60
+
+
+def get_local_offset():
+    seconds = math.ceil((datetime.datetime.now() - datetime.datetime.utcnow()).total_seconds())
+    return seconds
+
+
+def to_seconds(hour, minute):
+    return (hour * 3600 + minute * 60)
+
+
+def format_seconds(seconds, add_sign=False):
+    sign = ''
+    if add_sign:
+        sign = '-' if seconds &lt; 0 else '+'
+    return '{sign}{hour:02d}:{minute:02d}'.format(
+        sign=sign,
+        hour=int(seconds / 3600),
+        minute=int((seconds % 3600) / 60),
+    )
+
+
+def to_local_time(s, local_offset=None):
+    local_offset = get_local_offset() if local_offset is None else local_offset
+    time_match = time_re.search(s)
+    hour_match = hour_re.search(s)
+    if not (time_match or hour_match):
+        return None, local_offset
+    tz_match = tz_re.search(s)
+
+    hour, minute = 0, 0
+    if time_match:
+        hour, minute = map(lambda group: int(time_match.group(group), 10), ('hour', 'minute'))
+    elif hour_match:
+        hour = int(hour_match.group('hour'), 10)
+        if hour_match.group('period').lower() == 'pm':
+            hour += 12
+    input_seconds = to_seconds(hour, minute)
+
+    if not tz_match:
+        return input_seconds, local_offset
+
+    input_offset = offset_by_abbr[tz_match.group(1)]
+    utc_seconds = input_seconds - input_offset
+    local_seconds = utc_seconds + local_offset
+    boxed_seconds = local_seconds % day_seconds
+    return boxed_seconds, local_offset
+
+
+def format_as_local_time(s):
+    boxed_seconds, local_offset = to_local_time(s)
+    if not boxed_seconds:
+        return None
+    return format_seconds(boxed_seconds) + ' ' + format_seconds(local_offset, True)
+
+
+if __name__ == '__main__':
+    try:
+        for s in sys.stdin:
+            print format_as_local_time(s) or "No time expression detected"
+    except Exception, e:
+        print s, e</string>
+					<key>CheckedForUserDefaultShell</key>
+					<true/>
+					<key>inputMethod</key>
+					<integer>0</integer>
+					<key>shell</key>
+					<string>/usr/bin/python</string>
+					<key>source</key>
+					<string></string>
+				</dict>
+				<key>BundleIdentifier</key>
+				<string>com.apple.RunShellScript</string>
+				<key>CFBundleVersion</key>
+				<string>2.0.3</string>
+				<key>CanShowSelectedItemsWhenRun</key>
+				<false/>
+				<key>CanShowWhenRun</key>
+				<true/>
+				<key>Category</key>
+				<array>
+					<string>AMCategoryUtilities</string>
+				</array>
+				<key>Class Name</key>
+				<string>RunShellScriptAction</string>
+				<key>InputUUID</key>
+				<string>C4255FB4-8F00-4094-B8E8-F36BAB07D3A9</string>
+				<key>Keywords</key>
+				<array>
+					<string>Shell</string>
+					<string>Script</string>
+					<string>Command</string>
+					<string>Run</string>
+					<string>Unix</string>
+				</array>
+				<key>OutputUUID</key>
+				<string>5F609548-AD84-4A23-8455-4AD90C49C45A</string>
+				<key>UUID</key>
+				<string>E840E25E-B059-4060-86BC-F089EA57FDAC</string>
+				<key>UnlocalizedApplications</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>arguments</key>
+				<dict>
+					<key>0</key>
+					<dict>
+						<key>default value</key>
+						<integer>0</integer>
+						<key>name</key>
+						<string>inputMethod</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>0</string>
+					</dict>
+					<key>1</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>source</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>1</string>
+					</dict>
+					<key>2</key>
+					<dict>
+						<key>default value</key>
+						<false/>
+						<key>name</key>
+						<string>CheckedForUserDefaultShell</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>2</string>
+					</dict>
+					<key>3</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>COMMAND_STRING</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>3</string>
+					</dict>
+					<key>4</key>
+					<dict>
+						<key>default value</key>
+						<string>/bin/sh</string>
+						<key>name</key>
+						<string>shell</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>4</string>
+					</dict>
+				</dict>
+				<key>isViewVisible</key>
+				<true/>
+				<key>location</key>
+				<string>309.500000:498.000000</string>
+				<key>nibPath</key>
+				<string>/System/Library/Automator/Run Shell Script.action/Contents/Resources/English.lproj/main.nib</string>
+			</dict>
+			<key>isViewVisible</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>action</key>
+			<dict>
+				<key>AMAccepts</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Optional</key>
+					<false/>
+					<key>Types</key>
+					<array>
+						<string>*</string>
+					</array>
+				</dict>
+				<key>AMActionVersion</key>
+				<string>v.1.0.2</string>
+				<key>AMApplication</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>AMParameterProperties</key>
+				<dict>
+					<key>variableUUID</key>
+					<dict>
+						<key>isPathPopUp</key>
+						<false/>
+						<key>selectedVariableUUID</key>
+						<string>046930FA-557E-40CC-ABC3-1A58206D6AF8</string>
+					</dict>
+				</dict>
+				<key>AMProvides</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Types</key>
+					<array>
+						<string>*</string>
+					</array>
+				</dict>
+				<key>AMRequiredResources</key>
+				<array/>
+				<key>ActionBundlePath</key>
+				<string>/System/Library/Automator/Set Value of Variable.action</string>
+				<key>ActionName</key>
+				<string>Set Value of Variable</string>
+				<key>ActionParameters</key>
+				<dict>
+					<key>variableUUID</key>
+					<string>046930FA-557E-40CC-ABC3-1A58206D6AF8</string>
+				</dict>
+				<key>BundleIdentifier</key>
+				<string>com.apple.Automator.Set_Value_of_Variable</string>
+				<key>CFBundleVersion</key>
+				<string>1.0.2</string>
+				<key>CanShowSelectedItemsWhenRun</key>
+				<true/>
+				<key>CanShowWhenRun</key>
+				<true/>
+				<key>Category</key>
+				<array>
+					<string>AMCategoryUtilities</string>
+				</array>
+				<key>Class Name</key>
+				<string>Set_Value_of_Variable</string>
+				<key>InputUUID</key>
+				<string>1A322026-EA2E-42EB-97BC-9F5417E17C6E</string>
+				<key>Keywords</key>
+				<array>
+					<string>variable</string>
+					<string>binding</string>
+					<string>input</string>
+					<string>output</string>
+					<string>storage</string>
+				</array>
+				<key>OutputUUID</key>
+				<string>589E5E05-B6C9-4887-8D21-818E1C6B8121</string>
+				<key>UUID</key>
+				<string>DCEFC5D7-39E6-4BB3-8AB5-53393A95B7FA</string>
+				<key>UnlocalizedApplications</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>arguments</key>
+				<dict>
+					<key>0</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>variableUUID</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>0</string>
+					</dict>
+				</dict>
+				<key>isViewVisible</key>
+				<true/>
+				<key>location</key>
+				<string>309.500000:315.000000</string>
+				<key>nibPath</key>
+				<string>/System/Library/Automator/Set Value of Variable.action/Contents/Resources/Base.lproj/main.nib</string>
+			</dict>
+			<key>isViewVisible</key>
+			<true/>
+		</dict>
+		<dict>
+			<key>action</key>
+			<dict>
+				<key>AMAccepts</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Optional</key>
+					<true/>
+					<key>Types</key>
+					<array/>
+				</dict>
+				<key>AMActionVersion</key>
+				<string>v.1.0</string>
+				<key>AMApplication</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>AMParameterProperties</key>
+				<dict>
+					<key>message</key>
+					<dict>
+						<key>tokenizedValue</key>
+						<array>
+							<string>$(046930FA-557E-40CC-ABC3-1A58206D6AF8)</string>
+						</array>
+					</dict>
+					<key>subtitle</key>
+					<dict/>
+					<key>title</key>
+					<dict>
+						<key>tokenizedValue</key>
+						<array>
+							<string>Local times</string>
+						</array>
+					</dict>
+				</dict>
+				<key>AMProvides</key>
+				<dict>
+					<key>Container</key>
+					<string>List</string>
+					<key>Types</key>
+					<array/>
+				</dict>
+				<key>ActionBundlePath</key>
+				<string>/System/Library/Automator/Display Notification.action</string>
+				<key>ActionName</key>
+				<string>Display Notification</string>
+				<key>ActionParameters</key>
+				<dict>
+					<key>message</key>
+					<string>$(046930FA-557E-40CC-ABC3-1A58206D6AF8)</string>
+					<key>subtitle</key>
+					<string></string>
+					<key>title</key>
+					<string>$(046930FA-557E-40CC-ABC3-1A58206D6AF8)</string>
+				</dict>
+				<key>BundleIdentifier</key>
+				<string>com.apple.Automator.Display-Notification</string>
+				<key>CFBundleVersion</key>
+				<string>1.0</string>
+				<key>CanShowSelectedItemsWhenRun</key>
+				<true/>
+				<key>CanShowWhenRun</key>
+				<false/>
+				<key>Category</key>
+				<array>
+					<string>AMCategoryUtilities</string>
+				</array>
+				<key>Class Name</key>
+				<string>AMDisplayNotificationAction</string>
+				<key>InputUUID</key>
+				<string>7A77FEC6-881E-4842-8A30-D0B7FA08C3AF</string>
+				<key>Keywords</key>
+				<array/>
+				<key>OutputUUID</key>
+				<string>FC755392-26EF-466E-AC5D-32E0812CA246</string>
+				<key>UUID</key>
+				<string>39810976-EE38-446D-8561-F39EA9259C4A</string>
+				<key>UnlocalizedApplications</key>
+				<array>
+					<string>Automator</string>
+				</array>
+				<key>arguments</key>
+				<dict>
+					<key>0</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>subtitle</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>0</string>
+					</dict>
+					<key>1</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>title</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>1</string>
+					</dict>
+					<key>2</key>
+					<dict>
+						<key>default value</key>
+						<string></string>
+						<key>name</key>
+						<string>message</string>
+						<key>required</key>
+						<string>0</string>
+						<key>type</key>
+						<string>0</string>
+						<key>uuid</key>
+						<string>2</string>
+					</dict>
+				</dict>
+				<key>isViewVisible</key>
+				<true/>
+				<key>location</key>
+				<string>309.500000:211.000000</string>
+				<key>nibPath</key>
+				<string>/System/Library/Automator/Display Notification.action/Contents/Resources/Base.lproj/main.nib</string>
+			</dict>
+			<key>isViewVisible</key>
+			<true/>
+		</dict>
+	</array>
+	<key>connectors</key>
+	<dict>
+		<key>01F4CD53-F56E-4B51-B04F-258845EED501</key>
+		<dict>
+			<key>from</key>
+			<string>E840E25E-B059-4060-86BC-F089EA57FDAC - E840E25E-B059-4060-86BC-F089EA57FDAC</string>
+			<key>to</key>
+			<string>DCEFC5D7-39E6-4BB3-8AB5-53393A95B7FA - DCEFC5D7-39E6-4BB3-8AB5-53393A95B7FA</string>
+		</dict>
+		<key>90CF6A3D-78E1-483E-A8DF-D78F001E2F2C</key>
+		<dict>
+			<key>from</key>
+			<string>DCEFC5D7-39E6-4BB3-8AB5-53393A95B7FA - DCEFC5D7-39E6-4BB3-8AB5-53393A95B7FA</string>
+			<key>to</key>
+			<string>39810976-EE38-446D-8561-F39EA9259C4A - 39810976-EE38-446D-8561-F39EA9259C4A</string>
+		</dict>
+	</dict>
+	<key>variables</key>
+	<array>
+		<dict>
+			<key>UUID</key>
+			<string>046930FA-557E-40CC-ABC3-1A58206D6AF8</string>
+			<key>identifier</key>
+			<string>com.apple.Automator.Variable.Storage</string>
+			<key>name</key>
+			<string>local_time</string>
+		</dict>
+	</array>
+	<key>workflowMetaData</key>
+	<dict>
+		<key>serviceInputTypeIdentifier</key>
+		<string>com.apple.Automator.text</string>
+		<key>serviceOutputTypeIdentifier</key>
+		<string>com.apple.Automator.nothing</string>
+		<key>serviceProcessesInput</key>
+		<integer>0</integer>
+		<key>workflowTypeIdentifier</key>
+		<string>com.apple.Automator.servicesMenu</string>
+	</dict>
+</dict>
+</plist>
