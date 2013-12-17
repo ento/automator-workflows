@@ -114,8 +114,7 @@ for tz_descr in map(str.split, tz_str.split('\n')):
             offset_by_abbr[tz_code] = tz_offset
 
 
-time_re = re.compile(r'(?P&lt;hour&gt;\d{1,2}):(?P&lt;minute&gt;\d{1,2})')
-hour_re = re.compile(r'(?P&lt;hour&gt;\d{1,2})(?P&lt;period&gt;am|pm)', re.IGNORECASE)
+time_re = re.compile(r'(?P&lt;hour&gt;\d{1,2})(:(?P&lt;minute&gt;\d{1,2}))?\s*(?P&lt;period&gt;am|pm)?', re.IGNORECASE)
 tz_re = re.compile(r'({})'.format('|'.join(offset_by_abbr.keys())))
 day_seconds = 24 * 60 * 60
 
@@ -143,18 +142,17 @@ def format_seconds(seconds, add_sign=False):
 def to_local_time(s, local_offset=None):
     local_offset = get_local_offset() if local_offset is None else local_offset
     time_match = time_re.search(s)
-    hour_match = hour_re.search(s)
-    if not (time_match or hour_match):
+    if not time_match:
         return None, local_offset
     tz_match = tz_re.search(s)
 
     hour, minute = 0, 0
     if time_match:
-        hour, minute = map(lambda group: int(time_match.group(group), 10), ('hour', 'minute'))
+        hour, minute = map(lambda group: int(time_match.group(group), 10) if time_match.group(group) else 0, ('hour', 'minute'))
     elif hour_match:
         hour = int(hour_match.group('hour'), 10)
-        if hour_match.group('period').lower() == 'pm':
-            hour += 12
+    if time_match.group('period') and time_match.group('period').lower() == 'pm':
+        hour += 12
     input_seconds = to_seconds(hour, minute)
 
     if not tz_match:
